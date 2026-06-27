@@ -1,6 +1,6 @@
 spring:
   application:
-    name: appointment-saas
+    name: bookly
 
   datasource:
     # Use environment variables in production: DB_URL, DB_USERNAME, DB_PASSWORD
