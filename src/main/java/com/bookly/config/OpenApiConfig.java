@@ -16,9 +16,9 @@ public class OpenApiConfig {
         final String securitySchemeName = "bearerAuth";
         return new OpenAPI()
                 .info(new Info()
-                        .title("Appointment Booking SaaS API")
+                        .title("Bookly API")
                         .version("1.0.0")
-                        .description("REST API documentation for the Multi-Tenant Scheduly SaaS platform."))
+                        .description("REST API documentation for the Bookly multi-tenant appointment booking platform."))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName,
