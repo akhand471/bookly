@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: appointment-saas
+
+  datasource:
+    # Use environment variables in production: DB_URL, DB_USERNAME, DB_PASSWORD
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/scheduly_db}
+    username: ${DB_USERNAME:akhand}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    # Disable open-in-view to prevent lazy-load N+1 during HTTP response serialization
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        # Dialect auto-detected by Hibernate 6 — no need to specify explicitly
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # OAuth2 is loaded conditionally — set real credentials via environment vars before enabling
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:dummy-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:dummy-client-secret}
+            scope:
+              - email
+              - profile
+
+app:
+  jwt:
+    # IMPORTANT: Set JWT_SECRET env var in production — NEVER commit real secrets to VCS.
+    # Generate with: openssl rand -base64 64
+    secret: ${JWT_SECRET:dGhpcyBpcyBhIHRlc3Qtb25seSBkZWZhdWx0IHNlY3JldCBrZXkgZm9yIGxvY2FsIGRldiBvbmx5!!!}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}         # 24 hours
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 days
