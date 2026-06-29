@@ -2,6 +2,7 @@ package com.bookly.config;
 
 import com.bookly.security.CustomAuthenticationEntryPoint;
 import com.bookly.security.JwtAuthenticationFilter;
+import com.bookly.security.OAuth2LoginSuccessHandler;
 import com.bookly.security.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitingFilter rateLimitingFilter;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
@@ -58,6 +60,9 @@ public class SecurityConfig {
                 // All other actuator endpoints require SUPER_ADMIN
                 .requestMatchers("/actuator/**").hasRole("SUPER_ADMIN")
                 .anyRequest().authenticated()
+            )
+            .oauth2Login(oauth2 -> oauth2
+                .successHandler(oAuth2LoginSuccessHandler)
             );
 
         // Rate limiting runs before JWT auth — rejects floods before any DB/Redis lookups
