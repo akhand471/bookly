@@ -66,8 +66,8 @@ public class SecurityConfig {
             );
 
         // Rate limiting runs before JWT auth — rejects floods before any DB/Redis lookups
-        http.addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

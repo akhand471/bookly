@@ -54,6 +54,9 @@ class AuthServiceTest {
     @Mock
     private AuthenticationManager authenticationManager;
 
+    @Mock
+    private AuditService auditService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -105,7 +108,7 @@ class AuthServiceTest {
         RefreshToken mockRefreshToken = RefreshToken.builder()
                 .token("refresh_token")
                 .build();
-        when(refreshTokenService.createRefreshToken(any())).thenReturn(mockRefreshToken);
+        when(refreshTokenService.createRefreshToken(any(), any(), any())).thenReturn(mockRefreshToken);
 
         // Act
         TokenResponse response = authService.registerBusiness(registerRequest);
@@ -164,7 +167,7 @@ class AuthServiceTest {
         RefreshToken mockRefreshToken = RefreshToken.builder()
                 .token("refresh_token")
                 .build();
-        when(refreshTokenService.createRefreshToken(any())).thenReturn(mockRefreshToken);
+        when(refreshTokenService.createRefreshToken(any(), any(), any())).thenReturn(mockRefreshToken);
 
         // Act
         TokenResponse response = authService.login(loginRequest);
@@ -201,7 +204,7 @@ class AuthServiceTest {
         RefreshToken newRefreshToken = RefreshToken.builder()
                 .token("new_refresh_token")
                 .build();
-        when(refreshTokenService.createRefreshToken(user)).thenReturn(newRefreshToken);
+        when(refreshTokenService.createRefreshToken(any(), any(), any())).thenReturn(newRefreshToken);
 
         // Act
         TokenResponse response = authService.refreshAccessToken(request);

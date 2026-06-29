@@ -10,12 +10,17 @@ import com.bookly.dto.UserResponse;
 import com.bookly.entity.Business;
 import com.bookly.entity.Role;
 import com.bookly.entity.User;
+import com.bookly.config.TenantInterceptor;
 import com.bookly.security.CustomAuthenticationEntryPoint;
 import com.bookly.security.CustomUserDetails;
 import com.bookly.security.CustomUserDetailsService;
 import com.bookly.security.JwtAuthenticationFilter;
 import com.bookly.security.JwtUtils;
+import com.bookly.security.OAuth2LoginSuccessHandler;
+import com.bookly.security.RateLimitingFilter;
+import com.bookly.service.AuditService;
 import com.bookly.service.AuthService;
+import com.bookly.service.PasswordResetService;
 import com.bookly.service.RefreshTokenService;
 import com.bookly.service.UserService;
 import jakarta.servlet.FilterChain;
@@ -73,6 +78,21 @@ class AuthControllerTest {
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @MockBean
+    private RateLimitingFilter rateLimitingFilter;
+
+    @MockBean
+    private OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+
+    @MockBean
+    private TenantInterceptor tenantInterceptor;
+
+    @MockBean
+    private AuditService auditService;
+
+    @MockBean
+    private PasswordResetService passwordResetService;
+
     private RegisterBusinessRequest validRegisterRequest;
     private LoginRequest validLoginRequest;
 
@@ -84,22 +104,40 @@ class AuthControllerTest {
                 .ownerFirstName("Alex")
                 .ownerLastName("Groom")
                 .email("alex@barber.com")
-                .password("password123")
+                .password("Password123!")
                 .build();
 
         validLoginRequest = LoginRequest.builder()
                 .email("alex@barber.com")
-                .password("password123")
+                .password("Password123!")
                 .build();
 
         // Stub the mock JWT filter to act as a pass-through in the Security Filter Chain
         doAnswer(invocation -> {
+            System.out.println("=== JWT FILTER STUB EXECUTED ===");
             ServletRequest request = invocation.getArgument(0);
             ServletResponse response = invocation.getArgument(1);
             FilterChain chain = invocation.getArgument(2);
             chain.doFilter(request, response);
             return null;
         }).when(jwtAuthenticationFilter).doFilter(any(), any(), any());
+
+        // Stub the mock rate limiting filter to act as a pass-through in the Security Filter Chain
+        doAnswer(invocation -> {
+            System.out.println("=== RATE LIMIT FILTER STUB EXECUTED ===");
+            ServletRequest request = invocation.getArgument(0);
+            ServletResponse response = invocation.getArgument(1);
+            FilterChain chain = invocation.getArgument(2);
+            chain.doFilter(request, response);
+            return null;
+        }).when(rateLimitingFilter).doFilter(any(), any(), any());
+
+        // Stub the tenant interceptor to pass-through (preHandle returning true)
+        try {
+            when(tenantInterceptor.preHandle(any(), any(), any())).thenReturn(true);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
@@ -117,6 +155,7 @@ class AuthControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validRegisterRequest)))
+                .andDo(org.springframework.test.web.servlet.result.MockMvcResultHandlers.print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").value("access"))

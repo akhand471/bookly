@@ -38,7 +38,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(
+    public void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
