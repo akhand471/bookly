@@ -21,8 +21,8 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @Column(nullable = false, unique = true, length = 512)
@@ -30,6 +30,12 @@ public class RefreshToken {
 
     @Column(name = "expiry_date", nullable = false)
     private Instant expiryDate;
+
+    @Column(name = "device_fingerprint")
+    private String deviceFingerprint;
+
+    @Column(name = "user_agent", length = 512)
+    private String userAgent;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

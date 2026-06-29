@@ -67,6 +67,17 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(null, "Logged out successfully"));
     }
 
+    @PostMapping("/logout-all")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Revoke all refresh token sessions across all devices")
+    public ResponseEntity<ApiResponse<Void>> logoutAll(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        int deleted = refreshTokenService.deleteByUser(userService.findById(userDetails.getId()));
+        auditService.log(AuditEventType.LOGOUT, userDetails.getId(), userDetails.getId(),
+                userDetails.getBusinessId(), null,
+                Map.of("email", userDetails.getEmail(), "action", "logout-all", "sessionsRevoked", deleted));
+        return ResponseEntity.ok(ApiResponse.success(null, "All sessions have been revoked"));
+    }
+
     @PostMapping("/forgot-password")
     @Operation(summary = "Request a password reset link for the given email")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(

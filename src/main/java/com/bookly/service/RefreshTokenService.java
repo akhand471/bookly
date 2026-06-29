@@ -26,18 +26,38 @@ public class RefreshTokenService {
         return refreshTokenRepository.findByToken(token);
     }
 
+    /**
+     * Create a refresh token for the given user and device.
+     * If a token already exists for the same device, it is replaced.
+     * If deviceFingerprint is null, all existing tokens for the user are deleted (legacy behavior).
+     */
     @Transactional
-    public RefreshToken createRefreshToken(User user) {
-        // Clean up any existing tokens for this user first
-        refreshTokenRepository.deleteByUser(user);
+    public RefreshToken createRefreshToken(User user, String deviceFingerprint, String userAgent) {
+        if (deviceFingerprint != null) {
+            // Replace only the token for this specific device
+            refreshTokenRepository.deleteByUserAndDeviceFingerprint(user, deviceFingerprint);
+        } else {
+            // Fallback: no device ID → single-session behavior
+            refreshTokenRepository.deleteByUser(user);
+        }
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)
                 .token(UUID.randomUUID().toString())
                 .expiryDate(Instant.now().plusMillis(refreshExpirationMs))
+                .deviceFingerprint(deviceFingerprint)
+                .userAgent(userAgent)
                 .build();
 
         return refreshTokenRepository.save(refreshToken);
+    }
+
+    /**
+     * Backwards-compatible overload for callers that don't pass device info.
+     */
+    @Transactional
+    public RefreshToken createRefreshToken(User user) {
+        return createRefreshToken(user, null, null);
     }
 
     public RefreshToken verifyExpiration(RefreshToken token) {
@@ -48,6 +68,9 @@ public class RefreshTokenService {
         return token;
     }
 
+    /**
+     * Revoke all sessions for a user ("sign out everywhere").
+     */
     @Transactional
     public int deleteByUser(User user) {
         return refreshTokenRepository.deleteByUser(user);

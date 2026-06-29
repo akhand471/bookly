@@ -70,7 +70,7 @@ public class AuthService {
         // 3. Generate Auth Tokens
         CustomUserDetails userDetails = new CustomUserDetails(owner);
         String accessToken = jwtUtils.generateToken(userDetails);
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(owner);
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(owner, getDeviceId(), getUserAgent());
 
         // 4. Audit
         auditService.log(AuditEventType.REGISTRATION, owner.getId(), owner.getId(),
@@ -98,7 +98,7 @@ public class AuthService {
                     .orElseThrow(() -> new UnauthorizedException("User details not found"));
 
             String accessToken = jwtUtils.generateToken(userDetails);
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user, getDeviceId(), getUserAgent());
 
             // Audit successful login
             auditService.log(AuditEventType.LOGIN_SUCCESS, user.getId(), user.getId(),
@@ -132,7 +132,7 @@ public class AuthService {
                     CustomUserDetails userDetails = new CustomUserDetails(user);
                     String newAccessToken = jwtUtils.generateToken(userDetails);
                     // Standard JWT rotation: regenerate the refresh token to prevent reuse attacks
-                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
+                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user, getDeviceId(), getUserAgent());
                     
                     return TokenResponse.builder()
                             .accessToken(newAccessToken)
@@ -159,5 +159,27 @@ public class AuthService {
             }
         } catch (Exception ignored) {}
         return "unknown";
+    }
+
+    private String getDeviceId() {
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                return attrs.getRequest().getHeader("X-Device-Id");
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String getUserAgent() {
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                return attrs.getRequest().getHeader("User-Agent");
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

@@ -13,8 +13,14 @@ import java.util.UUID;
 @Repository
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
     Optional<RefreshToken> findByToken(String token);
-    
+
+    Optional<RefreshToken> findByUserAndDeviceFingerprint(User user, String deviceFingerprint);
+
     @Modifying
     @Transactional  // Required: @Modifying operations must execute inside a transaction
     int deleteByUser(User user);
+
+    @Modifying
+    @Transactional
+    int deleteByUserAndDeviceFingerprint(User user, String deviceFingerprint);
 }
