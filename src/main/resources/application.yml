@@ -41,6 +41,15 @@ spring:
               - email
               - profile
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
 app:
   jwt:
     # IMPORTANT: Set JWT_SECRET env var in production — NEVER commit real secrets to VCS.

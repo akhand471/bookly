@@ -39,13 +39,17 @@ public class SecurityConfig {
             .exceptionHandling(exception -> exception.authenticationEntryPoint(customAuthenticationEntryPoint))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
+                // Public endpoints — no authentication required
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/actuator/**"
+                    "/swagger-ui.html"
                 ).permitAll()
+                // Actuator: health and info are public (for load balancer probes)
+                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                // All other actuator endpoints require SUPER_ADMIN
+                .requestMatchers("/actuator/**").hasRole("SUPER_ADMIN")
                 .anyRequest().authenticated()
             );
 
