@@ -2,6 +2,7 @@ package com.bookly.exception;
 
 import com.bookly.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -56,6 +57,14 @@ public class GlobalExceptionHandler {
         log.warn("Access denied: {}", ex.getMessage());
         ApiResponse<Object> response = ApiResponse.error("You do not have permission to access this resource");
         return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        // Catches concurrent registration race conditions (TOCTOU on unique constraints)
+        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        ApiResponse<Object> response = ApiResponse.error("Email or subdomain already in use");
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(Exception.class)
