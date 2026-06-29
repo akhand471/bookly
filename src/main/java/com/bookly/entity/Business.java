@@ -1,6 +1,7 @@
 package com.bookly.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -21,17 +22,21 @@ public class Business {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
+    @Size(max = 100)
     private String name;
 
-    @Column(unique = true)
+    @Column(unique = true, length = 50)
+    @Size(max = 50)
     private String subdomain;
 
-    @Column(name = "logo_url")
+    @Column(name = "logo_url", length = 512)
     private String logoUrl;
 
+    @Column(length = 50)
     private String phone;
 
+    @Column(length = 255)
     private String email;
 
     @Column(columnDefinition = "TEXT")
