@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- ===== DEV PROFILE: Human-readable coloured output ===== -->
+    <springProfile name="default,dev,test">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+        </root>
+
+        <logger name="com.bookly" level="DEBUG" />
+    </springProfile>
+
+    <!-- ===== PROD PROFILE: JSON-structured for log aggregation ===== -->
+    <springProfile name="prod,staging">
+        <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="ch.qos.logback.classic.encoder.JsonEncoder" />
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_JSON" />
+        </root>
+
+        <logger name="com.bookly" level="INFO" />
+        <logger name="org.hibernate.SQL" level="WARN" />
+    </springProfile>
+
+</configuration>
