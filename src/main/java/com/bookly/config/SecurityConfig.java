@@ -2,6 +2,7 @@ package com.bookly.config;
 
 import com.bookly.security.CustomAuthenticationEntryPoint;
 import com.bookly.security.JwtAuthenticationFilter;
+import com.bookly.security.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -30,6 +31,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitingFilter rateLimitingFilter;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     @Value("${app.cors.allowed-origins}")
@@ -57,6 +59,8 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             );
 
+        // Rate limiting runs before JWT auth — rejects floods before any DB/Redis lookups
+        http.addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
