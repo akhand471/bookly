@@ -14,11 +14,7 @@ spring:
       ddl-auto: validate
     # Disable open-in-view to prevent lazy-load N+1 during HTTP response serialization
     open-in-view: false
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        # Dialect auto-detected by Hibernate 6 — no need to specify explicitly
+    # show-sql and format_sql are profile-specific — see application-dev.yml / application-prod.yml
 
   flyway:
     enabled: true
