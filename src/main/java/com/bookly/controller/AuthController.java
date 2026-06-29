@@ -1,7 +1,9 @@
 package com.bookly.controller;
 
 import com.bookly.dto.*;
+import com.bookly.entity.AuditEventType;
 import com.bookly.security.CustomUserDetails;
+import com.bookly.service.AuditService;
 import com.bookly.service.AuthService;
 import com.bookly.service.RefreshTokenService;
 import com.bookly.service.UserService;
@@ -14,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -22,6 +26,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
+    private final AuditService auditService;
     // UserService encapsulates user lookups — controllers must NOT inject repositories directly
     private final UserService userService;
 
@@ -55,6 +60,8 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal CustomUserDetails userDetails) {
         // Delegate user lookup to UserService — not repository
         refreshTokenService.deleteByUser(userService.findById(userDetails.getId()));
+        auditService.log(AuditEventType.LOGOUT, userDetails.getId(), userDetails.getId(),
+                userDetails.getBusinessId(), null, Map.of("email", userDetails.getEmail()));
         return ResponseEntity.ok(ApiResponse.success(null, "Logged out successfully"));
     }
 

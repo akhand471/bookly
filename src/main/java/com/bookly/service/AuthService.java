@@ -4,23 +4,26 @@ import com.bookly.dto.LoginRequest;
 import com.bookly.dto.RegisterBusinessRequest;
 import com.bookly.dto.RefreshTokenRequest;
 import com.bookly.dto.TokenResponse;
-import com.bookly.entity.Business;
-import com.bookly.entity.Role;
-import com.bookly.entity.User;
-import com.bookly.entity.RefreshToken;
+import com.bookly.entity.*;
 import com.bookly.exception.ConflictException;
 import com.bookly.exception.UnauthorizedException;
 import com.bookly.repository.BusinessRepository;
 import com.bookly.repository.UserRepository;
 import com.bookly.security.CustomUserDetails;
 import com.bookly.security.JwtUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +32,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BusinessRepository businessRepository;
     private final RefreshTokenService refreshTokenService;
+    private final AuditService auditService;
     private final JwtUtils jwtUtils;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
@@ -68,6 +72,11 @@ public class AuthService {
         String accessToken = jwtUtils.generateToken(userDetails);
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(owner);
 
+        // 4. Audit
+        auditService.log(AuditEventType.REGISTRATION, owner.getId(), owner.getId(),
+                business.getId(), getClientIp(),
+                Map.of("email", owner.getEmail(), "subdomain", business.getSubdomain()));
+
         return TokenResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken.getToken())
@@ -79,24 +88,37 @@ public class AuthService {
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
 
-        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        User user = userRepository.findByEmail(userDetails.getEmail())
-                .orElseThrow(() -> new UnauthorizedException("User details not found"));
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            User user = userRepository.findByEmail(userDetails.getEmail())
+                    .orElseThrow(() -> new UnauthorizedException("User details not found"));
 
-        String accessToken = jwtUtils.generateToken(userDetails);
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+            String accessToken = jwtUtils.generateToken(userDetails);
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
-        return TokenResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
-                .role(user.getRole().name())
-                .email(user.getEmail())
-                .businessId(userDetails.getBusinessId())
-                .build();
+            // Audit successful login
+            auditService.log(AuditEventType.LOGIN_SUCCESS, user.getId(), user.getId(),
+                    userDetails.getBusinessId(), getClientIp(),
+                    Map.of("email", user.getEmail()));
+
+            return TokenResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken.getToken())
+                    .role(user.getRole().name())
+                    .email(user.getEmail())
+                    .businessId(userDetails.getBusinessId())
+                    .build();
+        } catch (BadCredentialsException e) {
+            // Audit failed login — actor unknown, use email in details
+            auditService.log(AuditEventType.LOGIN_FAILURE, null, null,
+                    null, getClientIp(),
+                    Map.of("email", request.getEmail()));
+            throw e;
+        }
     }
 
     @Transactional
@@ -121,5 +143,21 @@ public class AuthService {
                             .build();
                 })
                 .orElseThrow(() -> new UnauthorizedException("Refresh token is not in the database"));
+    }
+
+    private String getClientIp() {
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest request = attrs.getRequest();
+                String xForwardedFor = request.getHeader("X-Forwarded-For");
+                if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+                    return xForwardedFor.split(",")[0].trim();
+                }
+                return request.getRemoteAddr();
+            }
+        } catch (Exception ignored) {}
+        return "unknown";
     }
 }

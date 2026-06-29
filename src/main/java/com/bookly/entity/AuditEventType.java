@@ -1,0 +1,13 @@
+package com.bookly.entity;
+
+public enum AuditEventType {
+    REGISTRATION,
+    LOGIN_SUCCESS,
+    LOGIN_FAILURE,
+    LOGOUT,
+    PASSWORD_RESET_REQUEST,
+    PASSWORD_RESET_COMPLETE,
+    ROLE_CHANGE,
+    INVITE_CREATED,
+    INVITE_ACCEPTED
+}
