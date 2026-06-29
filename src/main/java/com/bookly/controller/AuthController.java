@@ -5,6 +5,7 @@ import com.bookly.entity.AuditEventType;
 import com.bookly.security.CustomUserDetails;
 import com.bookly.service.AuditService;
 import com.bookly.service.AuthService;
+import com.bookly.service.PasswordResetService;
 import com.bookly.service.RefreshTokenService;
 import com.bookly.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
+    private final PasswordResetService passwordResetService;
     private final AuditService auditService;
     // UserService encapsulates user lookups — controllers must NOT inject repositories directly
     private final UserService userService;
@@ -65,6 +67,24 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(null, "Logged out successfully"));
     }
 
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Request a password reset link for the given email")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        // Always return success to prevent email enumeration
+        passwordResetService.requestReset(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success(null,
+                "If an account exists with this email, a password reset link has been sent"));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password using a valid reset token")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.executeReset(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.success(null, "Password has been reset successfully"));
+    }
+
     @GetMapping("/me")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Get user details of the current active session")
@@ -74,3 +94,4 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response, "Profile details retrieved successfully"));
     }
 }
+
