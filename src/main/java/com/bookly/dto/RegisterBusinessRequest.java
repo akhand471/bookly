@@ -2,7 +2,9 @@ package com.bookly.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import com.bookly.validation.NotReservedSubdomain;
 import com.bookly.validation.StrongPassword;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +23,9 @@ public class RegisterBusinessRequest {
 
     @NotBlank(message = "Subdomain is required")
     @Size(min = 2, max = 50, message = "Subdomain must be between 2 and 50 characters")
+    @Pattern(regexp = "^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$",
+            message = "Subdomain must contain only lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen")
+    @NotReservedSubdomain
     private String subdomain;
 
     @NotBlank(message = "Owner first name is required")
