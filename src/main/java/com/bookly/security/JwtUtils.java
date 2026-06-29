@@ -73,6 +73,20 @@ public class JwtUtils {
                 .getSubject();
     }
 
+    /**
+     * Extract a named claim value from a validated JWT token.
+     * Returns null if the claim is absent or null.
+     */
+    public String getClaimFromToken(String token, String claimName) {
+        Object value = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get(claimName);
+        return value != null ? value.toString() : null;
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);

@@ -3,6 +3,9 @@ package com.bookly.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
@@ -10,6 +13,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "businessId", type = UUID.class))
+@Filter(name = "tenantFilter", condition = "business_id = :businessId")
 @Getter
 @Setter
 @NoArgsConstructor

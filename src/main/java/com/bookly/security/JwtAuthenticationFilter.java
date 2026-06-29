@@ -1,5 +1,7 @@
 package com.bookly.security;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +18,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -42,12 +45,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                // Populate tenant context from JWT businessId claim
+                String businessIdStr = jwtUtils.getClaimFromToken(jwt, "businessId");
+                if (businessIdStr != null) {
+                    TenantContext.setCurrentTenant(UUID.fromString(businessIdStr));
+                }
             }
         } catch (Exception e) {
             log.error("Cannot set user authentication: {}", e.getMessage());
         }
 
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            // Always clear tenant context to prevent leaking across requests
+            TenantContext.clear();
+        }
     }
 
     private String parseJwt(HttpServletRequest request) {
