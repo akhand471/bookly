@@ -9,3 +9,7 @@ logging:
   level:
     com.bookly: DEBUG
     org.hibernate.SQL: DEBUG
+
+app:
+  security:
+    trusted-proxies: []   # No proxies in dev — X-Forwarded-For always ignored

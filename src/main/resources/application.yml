@@ -53,7 +53,7 @@ app:
     # IMPORTANT: Set JWT_SECRET env var in production — NEVER commit real secrets to VCS.
     # Generate with: openssl rand -base64 64
     secret: ${JWT_SECRET:dGhpcyBpcyBhIHRlc3Qtb25seSBkZWZhdWx0IHNlY3JldCBrZXkgZm9yIGxvY2FsIGRldiBvbmx5!!!}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}         # 24 hours
+    expiration-ms: ${JWT_EXPIRATION_MS:900000}          # 15 minutes (clients must use refresh-token rotation)
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 days
   rate-limit:
     login:
@@ -62,3 +62,8 @@ app:
     register:
       max-attempts: 3
       window-seconds: 600     # 10 minutes
+  security:
+    # Trusted upstream proxy IPs or CIDRs (e.g. your load balancer).
+    # When empty, X-Forwarded-For is NEVER trusted — safe default for dev.
+    # In production, set TRUSTED_PROXY_CIDR to your LB/ingress IP or CIDR.
+    trusted-proxies: []

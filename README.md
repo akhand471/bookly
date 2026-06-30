@@ -88,10 +88,13 @@ Key environment variables:
 | `DB_PASSWORD` | — | Database password |
 | `REDIS_HOST` | `localhost` | Redis hostname |
 | `JWT_SECRET` | dev default | **Required in production** |
-| `JWT_EXPIRATION_MS` | `86400000` (24h) | Access token TTL |
+| `JWT_EXPIRATION_MS` | `900000` (15 min) | Access token TTL — clients must use refresh-token rotation |
+| `JWT_REFRESH_EXPIRATION_MS` | `604800000` (7 days) | Refresh token TTL |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated origins |
 | `GOOGLE_CLIENT_ID` | — | Google OAuth2 client ID |
 | `GOOGLE_CLIENT_SECRET` | — | Google OAuth2 client secret |
+| `TRUSTED_PROXY_CIDR` | _(empty)_ | **Required in production** — IP or CIDR of your load balancer/ingress (e.g. `10.0.0.0/8`). Without this, `X-Forwarded-For` is never trusted and rate limiting / audit logs will log the LB's IP instead of the real client. |
+
 
 ## Project Structure
 

@@ -30,6 +30,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private final StringRedisTemplate redisTemplate;
     private final RateLimitProperties rateLimitProperties;
     private final ObjectMapper objectMapper;
+    private final ClientIpResolver clientIpResolver;
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
@@ -44,7 +45,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String path = request.getServletPath();
-        String clientIp = getClientIp(request);
+        String clientIp = clientIpResolver.resolve(request);
 
         RateLimitProperties.Endpoint config = path.contains("/login")
                 ? rateLimitProperties.getLogin()
@@ -77,11 +78,5 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
+
 }

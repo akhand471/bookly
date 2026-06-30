@@ -9,3 +9,12 @@ logging:
   level:
     com.bookly: INFO
     org.hibernate.SQL: WARN
+
+app:
+  security:
+    # REQUIRED: Set TRUSTED_PROXY_CIDR to your load balancer / ingress IP or CIDR.
+    # Example: 10.0.0.0/8  or  172.16.0.1
+    # Without this, X-Forwarded-For will never be trusted and rate limiting / audit
+    # logs will use the LB's IP, which breaks both features in a proxied deployment.
+    trusted-proxies:
+      - ${TRUSTED_PROXY_CIDR:}

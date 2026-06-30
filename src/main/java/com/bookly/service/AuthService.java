@@ -11,7 +11,7 @@ import com.bookly.repository.BusinessRepository;
 import com.bookly.repository.UserRepository;
 import com.bookly.security.CustomUserDetails;
 import com.bookly.security.JwtUtils;
-import jakarta.servlet.http.HttpServletRequest;
+import com.bookly.security.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -36,6 +36,7 @@ public class AuthService {
     private final JwtUtils jwtUtils;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final ClientIpResolver clientIpResolver;
 
     @Transactional
     public TokenResponse registerBusiness(RegisterBusinessRequest request) {
@@ -150,12 +151,7 @@ public class AuthService {
             ServletRequestAttributes attrs =
                     (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs != null) {
-                HttpServletRequest request = attrs.getRequest();
-                String xForwardedFor = request.getHeader("X-Forwarded-For");
-                if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-                    return xForwardedFor.split(",")[0].trim();
-                }
-                return request.getRemoteAddr();
+                return clientIpResolver.resolve(attrs.getRequest());
             }
         } catch (Exception ignored) {}
         return "unknown";
