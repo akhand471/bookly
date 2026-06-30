@@ -13,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.UUID;
@@ -26,6 +28,7 @@ import static org.mockito.Mockito.*;
  * not from the (potentially stale) JWT claim.
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class JwtAuthenticationFilterTest {
 
     @Mock private JwtUtils jwtUtils;
@@ -73,15 +76,21 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void tenantContext_setFromDbRecord_notJwtClaim() throws Exception {
-        // The DB now has NEW_BUSINESS_ID for this user, even though the JWT claim
-        // might still carry ORIGINAL_BUSINESS_ID
+        // The DB now has NEW_BUSINESS_ID — capture TenantContext during the filter chain
+        // (before the finally block clears it) to verify it matches the DB value.
         CustomUserDetails freshDbUser = buildUserDetails(NEW_BUSINESS_ID);
         when(userDetailsService.loadUserByUsername("user@example.com")).thenReturn(freshDbUser);
 
+        UUID[] capturedTenant = new UUID[1];
+        doAnswer(inv -> {
+            capturedTenant[0] = TenantContext.getCurrentTenant();
+            return null;
+        }).when(filterChain).doFilter(request, response);
+
         filter.doFilterInternal(request, response, filterChain);
 
-        // TenantContext must reflect the DB value, not whatever was in the JWT claim
-        assertThat(TenantContext.getCurrentTenant()).isEqualTo(NEW_BUSINESS_ID);
+        // TenantContext during request must have been set to the DB (live) businessId
+        assertThat(capturedTenant[0]).isEqualTo(NEW_BUSINESS_ID);
         verify(filterChain).doFilter(request, response);
     }
 
