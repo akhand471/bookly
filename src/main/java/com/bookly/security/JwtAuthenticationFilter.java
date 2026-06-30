@@ -1,7 +1,5 @@
 package com.bookly.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,7 +16,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -46,10 +43,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                // Populate tenant context from JWT businessId claim
-                String businessIdStr = jwtUtils.getClaimFromToken(jwt, "businessId");
-                if (businessIdStr != null) {
-                    TenantContext.setCurrentTenant(UUID.fromString(businessIdStr));
+                // Populate TenantContext from the live DB-loaded user record, NOT the JWT claim.
+                // This ensures that if a user's businessId changes in the DB mid-session,
+                // the next request scopes correctly to the new tenant rather than the one
+                // baked into the (now-stale) token. The 15-minute TTL limits the exposure window.
+                if (userDetails instanceof CustomUserDetails cud && cud.getBusinessId() != null) {
+                    TenantContext.setCurrentTenant(cud.getBusinessId());
                 }
             }
         } catch (Exception e) {
