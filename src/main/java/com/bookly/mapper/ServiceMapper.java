@@ -30,7 +30,7 @@ public interface ServiceMapper {
     @Mapping(target = "business", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "active", source = "active")
+    @Mapping(target = "isActive", source = "active")
     BookableService toEntity(ServiceRequest request);
 
     /**
@@ -42,6 +42,5 @@ public interface ServiceMapper {
     @Mapping(target = "business", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "active", source = "active")
     void updateEntity(ServiceRequest request, @MappingTarget BookableService entity);
 }

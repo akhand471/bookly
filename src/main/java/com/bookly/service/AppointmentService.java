@@ -8,6 +8,7 @@ import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.mapper.AppointmentMapper;
 import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.BookableServiceRepository;
+import com.bookly.repository.CustomerRepository;
 import com.bookly.repository.UserRepository;
 import com.bookly.security.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -46,10 +47,10 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final BookableServiceRepository serviceRepository;
     private final UserRepository userRepository;
+    private final CustomerRepository customerRepository;
     private final AppointmentMapper appointmentMapper;
     private final AvailabilityService availabilityService;
-
-    // ─── Create ────────────────────────────────────────────────────────────
+    private final NotificationService notificationService;
 
     /**
      * Books a new appointment slot.
@@ -72,8 +73,8 @@ public class AppointmentService {
         // 2. Load and validate staff
         User staff = loadStaffInBusiness(request.getStaffId(), businessId);
 
-        // 3. Load customer
-        User customer = userRepository.findById(customerId)
+        // 3. Load customer (references customers table since Phase 3)
+        Customer customer = customerRepository.findByIdAndBusiness_Id(customerId, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId));
 
         // 4. Compute end time from service duration
@@ -105,6 +106,9 @@ public class AppointmentService {
         availabilityService.evictCache(businessId, staff.getId(),
                 service.getId(), startTime.toLocalDate());
 
+        // 8. Async booking confirmation email
+        notificationService.sendBookingConfirmation(saved);
+
         return appointmentMapper.toResponse(saved);
     }
 
@@ -128,6 +132,9 @@ public class AppointmentService {
             throw new BadRequestException("Cannot cancel a completed appointment");
         }
 
+        // Cancellation policy enforcement
+        enforceCancellationPolicy(appointment);
+
         LocalDate date = appointment.getStartTime().toLocalDate();
         UUID staffId = appointment.getStaff().getId();
         UUID serviceId = appointment.getService().getId();
@@ -137,6 +144,7 @@ public class AppointmentService {
         log.info("Appointment cancelled: id={}", appointmentId);
 
         availabilityService.evictCache(businessId, staffId, serviceId, date);
+        notificationService.sendCancellationNotification(saved);
         return appointmentMapper.toResponse(saved);
     }
 
@@ -157,6 +165,9 @@ public class AppointmentService {
             throw new BadRequestException(
                     "Cannot reschedule an appointment with status: " + appointment.getStatus());
         }
+
+        // Cancellation policy enforcement (reschedule is subject to same notice requirement)
+        enforceCancellationPolicy(appointment);
 
         // Evict cache for the OLD slot before updating
         availabilityService.evictCache(businessId,
@@ -189,6 +200,7 @@ public class AppointmentService {
         availabilityService.evictCache(businessId, newStaff.getId(),
                 appointment.getService().getId(), newStart.toLocalDate());
 
+        notificationService.sendRescheduleNotification(saved);
         return appointmentMapper.toResponse(saved);
     }
 
@@ -245,5 +257,21 @@ public class AppointmentService {
             throw new ResourceNotFoundException("Staff member not found: " + staffId);
         }
         return staff;
+    }
+
+    /**
+     * Enforces the business's cancellation notice policy.
+     * Throws {@link BadRequestException} if the appointment is too close to cancel/reschedule.
+     */
+    private void enforceCancellationPolicy(Appointment appointment) {
+        int noticeHours = appointment.getBusiness().getCancellationNoticeHours();
+        if (noticeHours > 0) {
+            OffsetDateTime deadline = appointment.getStartTime().minusHours(noticeHours);
+            if (OffsetDateTime.now().isAfter(deadline)) {
+                throw new BadRequestException(
+                        "Cancellations and reschedules must be made at least " + noticeHours +
+                        " hour(s) before the appointment start time.");
+            }
+        }
     }
 }

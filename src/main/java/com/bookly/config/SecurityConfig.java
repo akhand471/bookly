@@ -51,6 +51,7 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/api/v1/invitations/accept",
+                    "/api/v1/public/**",         // Customer-facing public booking flow
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html"

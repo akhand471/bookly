@@ -52,7 +52,7 @@ public class Appointment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
-    private User customer;
+    private Customer customer;
 
     @Column(name = "start_time", nullable = false)
     private OffsetDateTime startTime;

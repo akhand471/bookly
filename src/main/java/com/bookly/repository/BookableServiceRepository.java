@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +29,11 @@ public interface BookableServiceRepository extends JpaRepository<BookableService
      * parameter here is the primary guard.
      */
     Page<BookableService> findAllByBusiness_IdAndIsActive(UUID businessId, boolean isActive, Pageable pageable);
+
+    /**
+     * Non-paginated list of active services for public booking page.
+     */
+    List<BookableService> findAllByBusiness_IdAndIsActiveTrue(UUID businessId);
 
     /**
      * Fetch a single service only if it belongs to the given business.

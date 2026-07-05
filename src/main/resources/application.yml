@@ -37,6 +37,19 @@ spring:
               - email
               - profile
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
 management:
   endpoints:
     web:
@@ -67,3 +80,9 @@ app:
     # When empty, X-Forwarded-For is NEVER trusted — safe default for dev.
     # In production, set TRUSTED_PROXY_CIDR to your LB/ingress IP or CIDR.
     trusted-proxies: []
+  notifications:
+    from-email: ${MAIL_FROM:noreply@bookly.com}
+    from-name: "Bookly"
+  scheduling:
+    reminder-cron: "${REMINDER_CRON:0 0 * * * *}"
+

@@ -8,6 +8,7 @@ import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.mapper.AppointmentMapper;
 import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.BookableServiceRepository;
+import com.bookly.repository.CustomerRepository;
 import com.bookly.repository.UserRepository;
 import com.bookly.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -39,8 +40,10 @@ class AppointmentServiceTest {
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private BookableServiceRepository serviceRepository;
     @Mock private UserRepository userRepository;
+    @Mock private CustomerRepository customerRepository;
     @Mock private AppointmentMapper appointmentMapper;
     @Mock private AvailabilityService availabilityService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private AppointmentService appointmentService;
@@ -54,7 +57,6 @@ class AppointmentServiceTest {
     private Business business;
     private BookableService service;
     private User staff;
-    private User customer;
     private Appointment appointment;
     private AppointmentResponse sampleResponse;
 
@@ -68,7 +70,8 @@ class AppointmentServiceTest {
 
         TenantContext.setCurrentTenant(businessId);
 
-        business = Business.builder().id(businessId).name("Salon").subdomain("salon").build();
+        business = Business.builder().id(businessId).name("Salon").subdomain("salon")
+                .cancellationNoticeHours(2).build();
 
         service = BookableService.builder()
                 .id(serviceId).business(business).name("Haircut")
@@ -77,14 +80,16 @@ class AppointmentServiceTest {
         staff = User.builder().id(staffId).firstName("Jane").lastName("Doe")
                 .email("jane@salon.com").role(Role.EMPLOYEE).business(business).build();
 
-        customer = User.builder().id(customerId).firstName("Alex").lastName("Smith")
-                .email("alex@customer.com").role(Role.CUSTOMER).business(business).build();
+        // Phase 3: customer is now a Customer entity (not User)
+        com.bookly.entity.Customer customerEntity = com.bookly.entity.Customer.builder()
+                .id(customerId).business(business)
+                .firstName("Alex").lastName("Smith").email("alex@customer.com").build();
 
         appointment = Appointment.builder()
                 .id(appointmentId).business(business).service(service)
-                .staff(staff).customer(customer)
-                .startTime(OffsetDateTime.now(ZoneOffset.UTC).plusDays(1))
-                .endTime(OffsetDateTime.now(ZoneOffset.UTC).plusDays(1).plusMinutes(30))
+                .staff(staff).customer(customerEntity)
+                .startTime(OffsetDateTime.now(ZoneOffset.UTC).plusDays(5))
+                .endTime(OffsetDateTime.now(ZoneOffset.UTC).plusDays(5).plusMinutes(30))
                 .status(AppointmentStatus.PENDING).build();
 
         sampleResponse = AppointmentResponse.builder()
@@ -109,12 +114,16 @@ class AppointmentServiceTest {
         when(serviceRepository.findByIdAndBusiness_Id(serviceId, businessId))
                 .thenReturn(Optional.of(service));
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(userRepository.findById(customerId)).thenReturn(Optional.of(customer));
+        when(customerRepository.findByIdAndBusiness_Id(customerId, businessId))
+                .thenReturn(Optional.of(com.bookly.entity.Customer.builder()
+                        .id(customerId).business(business)
+                        .firstName("Alex").lastName("Smith").email("alex@customer.com").build()));
         when(appointmentRepository.existsOverlappingAppointment(any(), any(), any()))
                 .thenReturn(false);
         when(appointmentRepository.save(any())).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(sampleResponse);
         doNothing().when(availabilityService).evictCache(any(), any(), any(), any());
+        doNothing().when(notificationService).sendBookingConfirmation(any());
 
         // Act
         AppointmentResponse result = appointmentService.create(request, customerId);
@@ -124,6 +133,7 @@ class AppointmentServiceTest {
         assertThat(result.getId()).isEqualTo(appointmentId);
         verify(appointmentRepository).save(any(Appointment.class));
         verify(availabilityService).evictCache(any(), any(), any(), any());
+        verify(notificationService).sendBookingConfirmation(any());
     }
 
     @Test
@@ -136,7 +146,10 @@ class AppointmentServiceTest {
         when(serviceRepository.findByIdAndBusiness_Id(serviceId, businessId))
                 .thenReturn(Optional.of(service));
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(userRepository.findById(customerId)).thenReturn(Optional.of(customer));
+        when(customerRepository.findByIdAndBusiness_Id(customerId, businessId))
+                .thenReturn(Optional.of(com.bookly.entity.Customer.builder()
+                        .id(customerId).business(business)
+                        .firstName("Alex").lastName("Smith").email("alex@customer.com").build()));
         when(appointmentRepository.existsOverlappingAppointment(any(), any(), any()))
                 .thenReturn(true); // slot is taken
 
@@ -173,12 +186,14 @@ class AppointmentServiceTest {
         when(appointmentRepository.save(appointment)).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(cancelledResponse);
         doNothing().when(availabilityService).evictCache(any(), any(), any(), any());
+        doNothing().when(notificationService).sendCancellationNotification(any());
 
         AppointmentResponse result = appointmentService.cancel(appointmentId);
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(result.getStatus()).isEqualTo("CANCELLED");
         verify(availabilityService).evictCache(any(), any(), any(), any());
+        verify(notificationService).sendCancellationNotification(appointment);
     }
 
     @Test
@@ -221,6 +236,7 @@ class AppointmentServiceTest {
         when(appointmentRepository.save(appointment)).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(rescheduledResponse);
         doNothing().when(availabilityService).evictCache(any(), any(), any(), any());
+        doNothing().when(notificationService).sendRescheduleNotification(any());
 
         AppointmentResponse result = appointmentService.reschedule(appointmentId, request);
 
@@ -228,6 +244,7 @@ class AppointmentServiceTest {
         assertThat(appointment.getEndTime()).isEqualTo(newStart.plusMinutes(30));
         // Cache evicted twice: once for old slot, once for new slot
         verify(availabilityService, times(2)).evictCache(any(), any(), any(), any());
+        verify(notificationService).sendRescheduleNotification(appointment);
     }
 
     @Test
@@ -275,5 +292,88 @@ class AppointmentServiceTest {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    // ─── cancellation policy ───────────────────────────────────────────────
+
+    @Test
+    void cancel_ShouldSucceed_WhenBeforeCancellationDeadline() {
+        // Appointment is 5 days away — well outside the 2-hour notice window
+        appointment.setStartTime(OffsetDateTime.now(ZoneOffset.UTC).plusDays(5));
+        appointment.setEndTime(appointment.getStartTime().plusMinutes(30));
+
+        AppointmentResponse cancelledResponse = AppointmentResponse.builder()
+                .id(appointmentId).status("CANCELLED").build();
+
+        when(appointmentRepository.findByIdAndBusiness_Id(appointmentId, businessId))
+                .thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(cancelledResponse);
+        doNothing().when(availabilityService).evictCache(any(), any(), any(), any());
+        doNothing().when(notificationService).sendCancellationNotification(any());
+
+        AppointmentResponse result = appointmentService.cancel(appointmentId);
+
+        assertThat(result.getStatus()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void cancel_ShouldThrowBadRequest_WhenWithinCancellationNoticeWindow() {
+        // Business requires 2 hours notice; appointment starts in 1 hour
+        appointment.setStartTime(OffsetDateTime.now(ZoneOffset.UTC).plusHours(1));
+        appointment.setEndTime(appointment.getStartTime().plusMinutes(30));
+
+        when(appointmentRepository.findByIdAndBusiness_Id(appointmentId, businessId))
+                .thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> appointmentService.cancel(appointmentId))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("at least 2 hour(s)");
+    }
+
+    @Test
+    void cancel_ShouldSucceed_WhenCancellationPolicyIsZero() {
+        // Business has no restriction (cancellationNoticeHours = 0)
+        Business noPolicyBusiness = Business.builder()
+                .id(businessId).name("No Policy Salon").subdomain("nopolicy")
+                .cancellationNoticeHours(0).build();
+
+        // Appointment starts in 30 minutes — normally would be blocked
+        appointment = Appointment.builder()
+                .id(appointmentId).business(noPolicyBusiness).service(service)
+                .staff(staff).customer(appointment.getCustomer())
+                .startTime(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30))
+                .endTime(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(60))
+                .status(AppointmentStatus.PENDING).build();
+
+        AppointmentResponse cancelledResponse = AppointmentResponse.builder()
+                .id(appointmentId).status("CANCELLED").build();
+
+        when(appointmentRepository.findByIdAndBusiness_Id(appointmentId, businessId))
+                .thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(cancelledResponse);
+        doNothing().when(availabilityService).evictCache(any(), any(), any(), any());
+        doNothing().when(notificationService).sendCancellationNotification(any());
+
+        AppointmentResponse result = appointmentService.cancel(appointmentId);
+
+        assertThat(result.getStatus()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void reschedule_ShouldThrowBadRequest_WhenWithinCancellationNoticeWindow() {
+        // Business requires 2 hours notice; appointment starts in 1 hour
+        appointment.setStartTime(OffsetDateTime.now(ZoneOffset.UTC).plusHours(1));
+        appointment.setEndTime(appointment.getStartTime().plusMinutes(30));
+        RescheduleAppointmentRequest request = RescheduleAppointmentRequest.builder()
+                .newStartTime(OffsetDateTime.now(ZoneOffset.UTC).plusDays(2)).build();
+
+        when(appointmentRepository.findByIdAndBusiness_Id(appointmentId, businessId))
+                .thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> appointmentService.reschedule(appointmentId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("at least 2 hour(s)");
     }
 }

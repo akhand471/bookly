@@ -50,6 +50,15 @@ public class Business {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    /**
+     * Minimum number of hours before appointment start that a customer or staff
+     * member may cancel or reschedule. 0 means no restriction.
+     * Defaults to 2 hours; configurable per business via the settings API.
+     */
+    @Builder.Default
+    @Column(name = "cancellation_notice_hours", nullable = false)
+    private int cancellationNoticeHours = 2;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

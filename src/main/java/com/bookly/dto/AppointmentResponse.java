@@ -42,6 +42,12 @@ public class AppointmentResponse {
     @Schema(description = "Customer full name", example = "Alex Smith")
     private String customerName;
 
+    @Schema(description = "Customer email address", example = "alex@example.com")
+    private String customerEmail;
+
+    @Schema(description = "Customer phone number", example = "+1-555-0100")
+    private String customerPhone;
+
     @Schema(description = "Appointment start time (ISO 8601)")
     private OffsetDateTime startTime;
 
