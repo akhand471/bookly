@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -61,9 +62,30 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        // Catches concurrent registration race conditions (TOCTOU on unique constraints)
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
-        ApiResponse<Object> response = ApiResponse.error("Email or subdomain already in use");
+        String cause = ex.getMostSpecificCause().getMessage();
+        log.warn("Data integrity violation: {}", cause);
+
+        // Appointment double-booking: unique constraint on (staff_id, start_time)
+        String message = (cause != null && cause.contains("uidx_appointment_staff_slot"))
+                ? "This time slot was just booked. Please choose another slot."
+                : "Email or subdomain already in use";
+
+        ApiResponse<Object> response = ApiResponse.error(message);
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Handles optimistic locking failures caused by concurrent writes to the same appointment row.
+     * This is the first line of double-booking defence: @Version on {@link com.bookly.entity.Appointment}
+     * causes Hibernate to throw this when two transactions race to modify the same row.
+     * Returns HTTP 409 with a retry-friendly message.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOptimisticLockingFailure(
+            ObjectOptimisticLockingFailureException ex) {
+        log.warn("Optimistic locking failure: {}", ex.getMessage());
+        ApiResponse<Object> response = ApiResponse.error(
+                "This time slot was just booked by another user. Please choose another slot and try again.");
         return new ResponseEntity<>(response, HttpStatus.CONFLICT);
     }
 
