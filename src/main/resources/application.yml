@@ -81,7 +81,7 @@ app:
     # In production, set TRUSTED_PROXY_CIDR to your LB/ingress IP or CIDR.
     trusted-proxies: []
   notifications:
-    from-email: ${MAIL_FROM:noreply@bookly.com}
+    from-email: ${MAIL_FROM:akhandgkp6393@gmail.com}
     from-name: "Bookly"
   scheduling:
     reminder-cron: "${REMINDER_CRON:0 0 * * * *}"
