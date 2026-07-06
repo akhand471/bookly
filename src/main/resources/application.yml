@@ -40,7 +40,7 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp-relay.brevo.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME:akhandgkp6393@gmail.com}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
