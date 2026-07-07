@@ -8,6 +8,7 @@ import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.mapper.AppointmentMapper;
 import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.BookableServiceRepository;
+import com.bookly.repository.ReviewRepository;
 import com.bookly.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ class PublicBookingServiceTest {
     @Mock private AvailabilityService availabilityService;
     @Mock private NotificationService notificationService;
     @Mock private AppointmentMapper appointmentMapper;
+    @Mock private ReviewRepository reviewRepository;
 
     @InjectMocks
     private PublicBookingService publicBookingService;
@@ -103,11 +105,15 @@ class PublicBookingServiceTest {
         when(businessService.getBusinessBySubdomain("barber")).thenReturn(business);
         when(serviceRepository.findAllByBusiness_IdAndIsActiveTrue(businessId))
                 .thenReturn(List.of(bookableService));
+        when(reviewRepository.getAverageRatingForService(serviceId)).thenReturn(4.7);
+        when(reviewRepository.getReviewCountForService(serviceId)).thenReturn(15L);
 
         List<PublicServiceResponse> result = publicBookingService.getPublicServices("barber");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Haircut");
+        assertThat(result.get(0).getAverageRating()).isEqualTo(4.7);
+        assertThat(result.get(0).getReviewCount()).isEqualTo(15L);
     }
 
     @Test
@@ -117,6 +123,22 @@ class PublicBookingServiceTest {
 
         assertThatThrownBy(() -> publicBookingService.getPublicServices("unknown"))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getPublicStaff_returnsActiveStaff() {
+        when(businessService.getBusinessBySubdomain("barber")).thenReturn(business);
+        when(userRepository.findAllByBusiness_IdAndIsEnabledTrue(businessId))
+                .thenReturn(List.of(staff));
+        when(reviewRepository.getAverageRatingForStaff(staffId)).thenReturn(4.9);
+        when(reviewRepository.getReviewCountForStaff(staffId)).thenReturn(8L);
+
+        List<PublicStaffResponse> result = publicBookingService.getPublicStaff("barber");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getFirstName()).isEqualTo("Jane");
+        assertThat(result.get(0).getAverageRating()).isEqualTo(4.9);
+        assertThat(result.get(0).getReviewCount()).isEqualTo(8L);
     }
 
     // ─── createGuestBooking ────────────────────────────────────────────────

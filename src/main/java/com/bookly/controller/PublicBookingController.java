@@ -1,13 +1,20 @@
 package com.bookly.controller;
 
 import com.bookly.dto.*;
+import com.bookly.entity.Business;
+import com.bookly.security.TenantContext;
 import com.bookly.service.AvailabilityService;
+import com.bookly.service.BusinessService;
 import com.bookly.service.PublicBookingService;
+import com.bookly.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +39,8 @@ import java.util.UUID;
 public class PublicBookingController {
 
     private final PublicBookingService publicBookingService;
+    private final ReviewService reviewService;
+    private final BusinessService businessService;
 
     // ─── Browse ────────────────────────────────────────────────────────────
 
@@ -73,7 +82,7 @@ public class PublicBookingController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
         AvailabilityResponse availability =
-                publicBookingService.getPublicAvailability(subdomain, serviceId, staffId, date);
+            publicBookingService.getPublicAvailability(subdomain, serviceId, staffId, date);
         return ResponseEntity.ok(ApiResponse.success(availability, "Availability retrieved successfully"));
     }
 
@@ -124,5 +133,68 @@ public class PublicBookingController {
 
         PublicBookingResponse response = publicBookingService.cancelPublicBooking(id, customerEmail);
         return ResponseEntity.ok(ApiResponse.success(response, "Booking cancelled successfully"));
+    }
+
+    // ─── Reviews ────────────────────────────────────────────────────────────
+
+    @PostMapping("/bookings/{id}/reviews")
+    @Operation(
+        summary = "Submit a customer review",
+        description = "Allows a guest or registered customer to submit a review for their completed booking using the booking ID as authorization. " +
+                      "Review window is limited to 14 days after completion."
+    )
+    public ResponseEntity<ApiResponse<ReviewResponse>> submitReview(
+            @PathVariable String subdomain,
+            @PathVariable UUID id,
+            @Valid @RequestBody ReviewRequest request) {
+
+        ReviewResponse response = reviewService.createReview(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response, "Review submitted successfully"));
+    }
+
+    @GetMapping("/services/{serviceId}/reviews")
+    @Operation(
+        summary = "List reviews for a service",
+        description = "Returns public reviews for a specific bookable service. Paginated."
+    )
+    public ResponseEntity<ApiResponse<PageResponse<PublicReviewResponse>>> getServiceReviews(
+            @PathVariable String subdomain,
+            @PathVariable UUID serviceId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        // Dynamically sets tenant context since this is public/unauthenticated
+        Business business = businessService.getBusinessBySubdomain(subdomain);
+        TenantContext.setCurrentTenant(business.getId());
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            PageResponse<PublicReviewResponse> reviews = reviewService.getReviewsForService(serviceId, pageable);
+            return ResponseEntity.ok(ApiResponse.success(reviews, "Service reviews retrieved successfully"));
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @GetMapping("/staff/{staffId}/reviews")
+    @Operation(
+        summary = "List reviews for a staff member",
+        description = "Returns public reviews for a specific staff member. Paginated."
+    )
+    public ResponseEntity<ApiResponse<PageResponse<PublicReviewResponse>>> getStaffReviews(
+            @PathVariable String subdomain,
+            @PathVariable UUID staffId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Business business = businessService.getBusinessBySubdomain(subdomain);
+        TenantContext.setCurrentTenant(business.getId());
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            PageResponse<PublicReviewResponse> reviews = reviewService.getReviewsForStaff(staffId, pageable);
+            return ResponseEntity.ok(ApiResponse.success(reviews, "Staff reviews retrieved successfully"));
+        } finally {
+            TenantContext.clear();
+        }
     }
 }

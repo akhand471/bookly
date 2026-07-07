@@ -8,6 +8,7 @@ import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.mapper.AppointmentMapper;
 import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.BookableServiceRepository;
+import com.bookly.repository.ReviewRepository;
 import com.bookly.repository.UserRepository;
 import com.bookly.security.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class PublicBookingService {
     private final AvailabilityService availabilityService;
     private final NotificationService notificationService;
     private final AppointmentMapper appointmentMapper;
+    private final ReviewRepository reviewRepository;
 
     // ─── Browse ────────────────────────────────────────────────────────────
 
@@ -59,6 +61,8 @@ public class PublicBookingService {
                         .description(s.getDescription())
                         .durationMinutes(s.getDurationMinutes())
                         .price(s.getPrice())
+                        .averageRating(reviewRepository.getAverageRatingForService(s.getId()))
+                        .reviewCount(reviewRepository.getReviewCountForService(s.getId()))
                         .build())
                 .toList();
     }
@@ -76,6 +80,8 @@ public class PublicBookingService {
                         .id(u.getId())
                         .firstName(u.getFirstName())
                         .lastName(u.getLastName())
+                        .averageRating(reviewRepository.getAverageRatingForStaff(u.getId()))
+                        .reviewCount(reviewRepository.getReviewCountForStaff(u.getId()))
                         .build())
                 .toList();
     }

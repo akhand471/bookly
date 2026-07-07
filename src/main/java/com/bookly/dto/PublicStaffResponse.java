@@ -27,4 +27,10 @@ public class PublicStaffResponse {
 
     @Schema(description = "Last name", example = "Doe")
     private String lastName;
+
+    @Schema(description = "Average customer rating score (0.0 to 5.0)", example = "4.8")
+    private double averageRating;
+
+    @Schema(description = "Total number of customer reviews", example = "42")
+    private long reviewCount;
 }

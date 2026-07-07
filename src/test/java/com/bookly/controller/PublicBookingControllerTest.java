@@ -6,7 +6,9 @@ import com.bookly.dto.*;
 import com.bookly.exception.ConflictException;
 import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.security.*;
+import com.bookly.service.BusinessService;
 import com.bookly.service.PublicBookingService;
+import com.bookly.service.ReviewService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,8 @@ class PublicBookingControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private PublicBookingService publicBookingService;
+    @MockBean private ReviewService reviewService;
+    @MockBean private BusinessService businessService;
 
     // Security infrastructure mocks required by @Import(SecurityConfig.class)
     @MockBean private JwtAuthenticationFilter jwtAuthenticationFilter;

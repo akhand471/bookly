@@ -34,4 +34,10 @@ public class PublicServiceResponse {
 
     @Schema(description = "Price of the service", example = "25.00")
     private BigDecimal price;
+
+    @Schema(description = "Average customer rating score (0.0 to 5.0)", example = "4.8")
+    private double averageRating;
+
+    @Schema(description = "Total number of customer reviews", example = "42")
+    private long reviewCount;
 }
