@@ -32,7 +32,7 @@
 13. [CI/CD Pipeline](#13-cicd-pipeline)
 14. [API Documentation](#14-api-documentation)
 15. [Configuration & Profiles](#15-configuration--profiles)
-16. [What's Next to Build](#16-whats-next-to-build)
+16. [Project Roadmap & Status](#16-project-roadmap--status)
 
 ---
 
@@ -60,9 +60,11 @@
 │                              │                               │
 │   ┌──────────────────────────▼──────────────────────────┐   │
 │   │                REST Controllers                      │   │
-│   │   AuthController · PublicBookingController           │   │
-│   │   CustomerController · ReviewController              │   │
-│   │   InvitationController · AppointmentController       │   │
+│   │   AuthController · InvitationController             │   │
+│   │   ServiceController · StaffScheduleController       │   │
+│   │   AvailabilityController · AppointmentController     │   │
+│   │   PublicBookingController · CustomerController      │   │
+│   │   BusinessSettingsController · ReviewController      │   │
 │   └──────────────────────────┬──────────────────────────┘   │
 │                              │                               │
 │   ┌──────────────────────────▼──────────────────────────┐   │
@@ -236,8 +238,28 @@ Incoming Request
 ### Layer 1 — Rate Limiting (Redis)
 Prevents brute-force attacks by tracking request counts in Redis with a sliding window.
 
+```
+Key format: "rate:{clientIp}:{endpoint}"
+Example:    "rate:192.168.1.1:/api/v1/auth/login"
+
+Rules:
+  /login    → max 5 requests per 60 seconds
+  /register → max 3 requests per 60 seconds
+```
+
 ### Layer 2 — JWT Authentication
-All protected admin/staff endpoints require a valid JWT Bearer token containing user details.
+All protected endpoints require a valid JWT Bearer token containing user details.
+
+```
+Token Structure:
+  Header:  { "alg": "HS256", "typ": "JWT" }
+  Payload: { "sub": "user@email.com",
+              "businessId": "uuid",
+              "role": "BUSINESS_OWNER",
+              "iat": 1700000000,
+              "exp": 1700000900 }   ← 15 min expiry
+  Signature: HMAC-SHA256(header + payload, secretKey)
+```
 
 ### Layer 3 — Multi-Tenant Isolation
 Every DB query is automatically scoped to the current tenant.
@@ -254,32 +276,136 @@ Every DB query is automatically scoped to the current tenant.
 | `PUBLIC/GUEST` | Browse catalog, select availability slots, book, cancel, and submit reviews |
 
 ### Layer 5 — Password Policy (@StrongPassword)
-Minimum 8 characters, uppercase, lowercase, digit, special character.
+Enforced at registration & password reset:
+```
+Requirements:
+  ✅ Minimum 8 characters
+  ✅ At least 1 uppercase letter  (A-Z)
+  ✅ At least 1 lowercase letter  (a-z)
+  ✅ At least 1 digit             (0-9)
+  ✅ At least 1 special character (!@#$%^&*...)
+  ✅ Maximum 50 characters
+```
+
+### Layer 6 — Immutable Audit Logging
+Every sensitive action is permanently recorded (no updates, no deletes).
 
 ---
 
 ## 6. Core User Flows
 
 ### 6.1 Business Registration
-Registers a business, matches the owner, sets default subdomain, and yields a JWT session token.
+
+```
+Client                          API Server                    PostgreSQL
+  │                                 │                              │
+  │  POST /api/v1/auth/register     │                              │
+  │  {                              │                              │
+  │    businessName: "Barber Shop"  │                              │
+  │    subdomain: "barber"          │                              │
+  │    ownerFirstName: "Alex"       │                              │
+  │    email: "alex@barber.com"     │                              │
+  │    password: "Password123!"     │                              │
+  │  }                              │                              │
+  │ ───────────────────────────────►│                              │
+  │                                 │  @StrongPassword validation  │
+  │                                 │  Subdomain format check      │
+  │                                 │  Reserved words check        │
+  │                                 │  BCrypt hash password        │
+  │                                 │  INSERT Business         ───►│
+  │                                 │  INSERT User (OWNER)     ───►│
+  │                                 │  Emit AUDIT event (async)    │
+  │                                 │  Generate accessToken (JWT)  │
+  │                                 │  Generate + store refresh ───►│
+  │  200 OK                         │                              │
+  │  { accessToken, refreshToken }  │                              │
+  │◄───────────────────────────────│                              │
+```
+
+---
 
 ### 6.2 Login & JWT Authentication
-Validates login request parameters, issues JWT access tokens and logs audits.
+
+```
+Client                        API Server                  Redis     PostgreSQL
+  │                               │                         │            │
+  │  POST /api/v1/auth/login      │                         │            │
+  │  { email, password }          │                         │            │
+  │ ─────────────────────────────►│                         │            │
+  │                               │  Check rate limit ─────►│            │
+  │                               │  counter < 5 → OK ◄────│            │
+  │                               │  Load user by email ─────────────── ►│
+  │                               │  BCrypt.verify(password, hash)        │
+  │                               │  Generate accessToken (15 min JWT)    │
+  │                               │  Create + store refreshToken ────────►│
+  │  200 OK                       │                         │            │
+  │  { accessToken, refreshToken }│                         │            │
+  │◄─────────────────────────────│                         │            │
+```
+
+---
 
 ### 6.3 Token Refresh
-Rotates tokens on every request to prevent replay attacks.
+
+```
+Client                          API Server                    PostgreSQL
+  │                                 │                              │
+  │  POST /api/v1/auth/refresh      │                              │
+  │  { "refreshToken": "abc123" }   │                              │
+  │ ───────────────────────────────►│                              │
+  │                                 │  Find refreshToken in DB ───►│
+  │                                 │  Check not expired           │
+  │                                 │  Check not revoked           │
+  │                                 │  DELETE old refreshToken ───►│
+  │                                 │  Generate new accessToken    │
+  │                                 │  INSERT new refreshToken ───►│
+  │  200 OK                         │                              │
+  │  { accessToken, refreshToken }  │                              │
+  │◄───────────────────────────────│                              │
+```
+
+---
 
 ### 6.4 Multi-Tenant Isolation
-Hibernate filters ensure databases are logically partitioned per business.
+Hibernate filters dynamically inject tenant constraints so that Business A's database scope is physically isolated from Business B.
+
+---
 
 ### 6.5 Employee Invitation Flow
-Generates secure tokens and sends a signup email to onboard staff.
+
+```
+Business Owner                  API Server                    New Employee
+     │                               │                              │
+     │  POST /api/v1/invitations     │                              │
+     │  { email: "staff@..." }       │                              │
+     │ ─────────────────────────────►│                              │
+     │                               │  Generate secure token       │
+     │                               │  BCrypt hash the token       │
+     │                               │  Store InvitationToken in DB │
+     │                               │  Send invite email ─────────────────────►
+     │  201 Created                  │                              │
+     │◄─────────────────────────────│                              │
+     │                               │                              │
+     │                               │   Employee clicks email link │
+     │                               │◄─────────────────────────────
+     │                               │  POST /api/v1/invitations/accept
+     │                               │  { token, password }
+     │                               │  Find non-expired token in DB│
+     │                               │  Verify BCrypt hash          │
+     │                               │  Create User (STAFF role)    │
+     │                               │  Mark token as USED          │
+     │                               │  Return JWT tokens ─────────────────────►
+```
+
+---
 
 ### 6.6 Google OAuth2 Login
-Allows single sign-on mapping via Google authentication.
+Allows user single sign-on mapping via Google authentication redirect handler.
+
+---
 
 ### 6.7 Password Reset Flow
-Initiates forgotten password tokens, invalidates current refresh tokens on reset.
+Initiates forgotten password link creation, invalidates current user refresh tokens upon completion.
 
 ---
 
@@ -308,35 +434,28 @@ Client                      PublicBookingController          CustomerService    
 ---
 
 ### 6.9 Cancellation Notice Policy Enforcement
-
-Businesses can configure a minimum cancellation notice period (e.g. `cancellationNoticeHours: 2`).
-
-*   When a customer attempts to cancel their booking via `POST /api/v1/public/{subdomain}/bookings/{id}/cancel`, the system retrieves the appointment start time.
-*   If the current time is past the cancellation window deadline (e.g. less than 2 hours before the appointment), a `400 BadRequestException` is thrown to enforce the policy.
+*   Businesses configure minimum notice hours (e.g. `cancellationNoticeHours: 2`).
+*   When a customer cancels via `POST /api/v1/public/{subdomain}/bookings/{id}/cancel`, the system retrieves the appointment start time and checks if the cancellation window is still open. If the current time is past the window, a `400 BadRequestException` is thrown.
 
 ---
 
 ### 6.10 Idempotent Email Notifications
-
 To guarantee that email notifications (e.g., booking confirmations or reminders) are never sent twice:
-
 ```
 Trigger Event ──► NotificationService ──► Check NotificationLog table 
                                                   │
                                                   ├──► Already SENT? ──► Skip sending
                                                   └──► NOT SENT? ──────► Send SMTP Mail ──► Save Log (SENT)
 ```
-*   **Reminder Scheduler**: An hourly `@Scheduled` task queries appointments starting within the 23-25h window, sending out reminders. If the scheduler runs again, the `uidx_notification_sent` index prevents double-sending.
+*   **Reminder Scheduler**: An hourly `@Scheduled` task queries appointments starting within the 23-25h window. If the scheduler runs again, the `uidx_notification_sent` index prevents double-sending.
 
 ---
 
 ### 6.11 Reviews, Ratings & Customer Privacy Masking
-
-After an appointment is completed, customers can leave a review rating (1-5) and an optional comment:
-*   **Access Token**: The `bookingId` (appointment UUID) serves as the authorization token for public submissions.
-*   **Completed check**: The appointment status must be `COMPLETED` and submitted within 14 days.
-*   **Aggregations**: Ratings are aggregated to return the `averageRating` and `reviewCount` on services and staff endpoints.
-*   **Privacy Masking**: Public reviews mask customer names (e.g. `Jane Doe` -> `Jane D.`) via [ReviewMapper.java](file:///Users/akhand/Desktop/Pro/bookly/src/main/java/com/bookly/mapper/ReviewMapper.java) before JSON serialization.
+*   **Access Token**: The completed `bookingId` serves as the authorization token for public submissions.
+*   **Completed check**: Reviews are limited to `COMPLETED` appointments within 14 days.
+*   **Aggregations**: Average scores and review counts are calculated dynamically and populated in public service and staff catalogs.
+*   **Privacy Masking**: Public reviews mask customer names (e.g. `Jane Doe` -> `Jane D.`) via MapStruct before JSON serialization.
 
 ---
 
@@ -355,31 +474,32 @@ After an appointment is completed, customers can leave a review rating (1-5) and
 │   hours (INT)        │
 └──────────┬───────────┘
            │ 1
+           ├─────────────────────────┬─────────────────────────┐
+           │ N                       │ N                       │ N
+┌──────────▼───────────┐      ┌──────▼───────────────┐  ┌──────▼───────────────┐
+│      customers       │      │        users         │  │       services       │
+├──────────────────────┤      ├──────────────────────┤  ├──────────────────────┤
+│ id (UUID) PK         │ 1:N  │ id (UUID) PK         │  │ id (UUID) PK         │
+│ business_id (FK)     ├─────►│ business_id (FK)     │  │ business_id (FK)     │
+│ first_name           │      │ role (Enum)          │  │ name                 │
+│ email (UNIQUE/T)     │      └──────────┬───────────┘  │ price                │
+└──────────┬───────────┘                 │ 1            └──────────┬───────────┘
+           │ 1                           │ N                       │ 1
+           │ N                           │                         │ N
+┌──────────▼─────────────────────────────▼─────────────────────────▼───────────┐
+│                                appointments                                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ id (UUID) PK                                                                 │
+│ business_id (FK)                                                             │
+│ customer_id (FK to customers)                                                │
+│ staff_id (FK to users)                                                       │
+│ service_id (FK to services)                                                  │
+│ status (PENDING / CONFIRMED / CANCELLED / COMPLETED)                          │
+└──────────┬───────────────────────────────────────────────────────────────────┘
+           │ 1
            ├─────────────────────────┐
-           │ N                       │ N
+           │ 1                       │ 1
 ┌──────────▼───────────┐      ┌──────▼───────────────┐
-│      customers       │      │        users         │
-├──────────────────────┤      ├──────────────────────┤
-│ id (UUID) PK         │ 1:N  │ id (UUID) PK         │
-│ business_id (FK)     ├─────►│ business_id (FK)     │
-│ first_name           │      │ role (OWNER/EMPLOYEE)│
-│ email (UNIQUE/T)     │      └──────────┬───────────┘
-└──────────┬───────────┘                 │ 1
-           │ 1                           │ N
-           │ N                           │
-┌──────────▼─────────────────────────────▼───────────┐
-│                    appointments                    │
-├────────────────────────────────────────────────────┤
-│ id (UUID) PK                                       │
-│ business_id (FK)                                   │
-│ customer_id (FK to customers)                      │
-│ staff_id (FK to users)                             │
-│ service_id (FK to services)                        │
-│ status (PENDING / CONFIRMED / CANCELLED / COMPLETED)│
-└──────────┬─────────────────────────────────────────┘
-           │ 1
-           │ 1
-┌──────────▼───────────┐      ┌──────────────────────┐
 │       reviews        │      │   notification_log   │
 ├──────────────────────┤      ├──────────────────────┤
 │ id (UUID) PK         │      │ id (UUID) PK         │
@@ -390,25 +510,43 @@ After an appointment is completed, customers can leave a review rating (1-5) and
 └──────────────────────┘
 ```
 
+### Flyway Migrations (Auto-run on startup)
+
+```
+V1__init_schema.sql             → Creates businesses and users tables
+V2__audit_logs.sql              → Creates audit_logs table (JSONB details)
+V3__password_reset_tokens.sql   → Creates password_reset_tokens table
+V4__multi_device_sessions.sql   → Modifies refresh_tokens table (device fingerprint support)
+V5__invitation_tokens.sql       → Creates invitation_tokens table
+V6__services.sql                → Creates bookable services table
+V7__staff_schedules.sql         → Creates staff_schedules and overrides tables
+V8__appointments.sql            → Creates appointment records table
+V9__customers.sql               → Creates isolated customer profiles table
+V10__appointments_customer_fk   → Migrates appointment FK from users to customers
+V11__cancellation_policy.sql    → Adds cancellation_notice_hours to businesses
+V12__notification_log.sql       → Creates idempotent notification logs table
+V13__reviews.sql                → Creates reviews and ratings table
+```
+
 ---
 
 ## 8. Rate Limiting & Brute Force Protection
-Filters queries inside Redis using atomic counters to block brute-force traffic.
+The `RateLimitingFilter` uses **Redis atomic operations** for thread-safe sliding window rate limiting.
 
 ---
 
 ## 9. Audit Logging
-Audit logs capture critical state transformations asynchronously inside the `audit_logs` table.
+Every sensitive action produces an immutable audit trail written asynchronously to the `audit_logs` table.
 
 ---
 
 ## 10. Structured Logging
-Applies console formatters for local environments and structured JSON logs for log aggregators in production.
+Profile-aware logging powered by Logback outputs human-readable logs in development and structured JSON in production.
 
 ---
 
 ## 11. Health Checks & Observability
-Spring Boot Actuator monitors database connectivity, disk usage, and local health.
+Spring Boot Actuator monitors system parameters, database connectivity, and Redis.
 
 ---
 
@@ -449,17 +587,34 @@ http://localhost:8080/swagger-ui.html
 ---
 
 ## 15. Configuration & Profiles
-Controlled using local Spring profiles (`dev`/`default`) and environment variables (`JWT_SECRET`, `MAIL_PASSWORD`) in cloud settings.
+Controlled using Spring profiles (`dev`/`prod`) and environment variables (`JWT_SECRET`, `MAIL_PASSWORD`).
 
 ---
 
-## 16. What's Next to Build
+## 16. Project Roadmap & Status
 
-All core scheduling engines, guest flows, and reviews are complete. Future iterations can cover:
-*   **Stripe Integration**: Require payments/deposits to secure slot bookings.
+### Phase 1 — Multi-Tenancy & Auth (✅ Complete)
+Built multi-tenant database partitioning schema, password resets, rate-limiting brute force protection, super admin tools, and user invitation tokens.
+
+### Phase 2 — Core Booking Engine (✅ Complete)
+Built bookable services catalog (`BookableService`), employee shifts and calendar schedules (`StaffSchedule`), availability engine (`AvailabilityService`), appointment records (`Appointment`), and optimistic double-booking prevention.
+
+### Phase 3 — Customer Experience (✅ Complete)
+Built public-facing guest booking flow (`PublicBookingService`), automatic customer profile creation/lookup (`Customer`), business-configurable cancellation window policy (`BusinessSettings/CancellationPolicy`), and async idempotent Brevo SMTP email notifications (`NotificationService`/`NotificationLog`).
+
+### Phase 4 — Reviews & Ratings (✅ Complete)
+Built post-appointment review system (`Review`) with 14-day completion windows, dynamic rating score aggregation, and privacy-focused name masking for public catalog listing.
+
+---
+
+## What's Next to Build
+Natural extensions for subsequent phases:
+*   **Stripe Payments**: Integrate online deposit or full payment capture at booking time.
+*   **Twilio SMS Reminders**: Expand notifications from email-only to active SMS reminders.
 *   **Waitlist**: Automatic waitlists that notify clients when slots open.
-*   **Calendar Synced Feeds**: Export `.ics` calendar sync feeds for staff.
-*   **Subscription Plans**: Subscription billing tiers for business tenants.
+*   **iCal Calendar Sync Feed**: Export `.ics` feeds for Google/Apple Calendar.
+*   **SaaS Tiered Subscription Plans**: Monthly subscription billing per business tier.
+*   **Business Analytics Dashboard**: Graphing utilization rates, popular services, and employee productivity.
 
 ---
 

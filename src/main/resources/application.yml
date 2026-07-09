@@ -40,7 +40,7 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp-relay.brevo.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:akhandgkp6393@gmail.com}
+    username: ${MAIL_USERNAME:noreply@example.com}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -81,7 +81,7 @@ app:
     # In production, set TRUSTED_PROXY_CIDR to your LB/ingress IP or CIDR.
     trusted-proxies: []
   notifications:
-    from-email: ${MAIL_FROM:akhandgkp6393@gmail.com}
+    from-email: ${MAIL_FROM:noreply@example.com}
     from-name: "Bookly"
   scheduling:
     reminder-cron: "${REMINDER_CRON:0 0 * * * *}"
