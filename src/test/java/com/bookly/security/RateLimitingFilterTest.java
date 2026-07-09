@@ -2,6 +2,10 @@ package com.bookly.security;
 
 import com.bookly.config.RateLimitProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.bucket4j.ConsumptionProbe;
+import io.github.bucket4j.distributed.BucketProxy;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
+import io.github.bucket4j.distributed.proxy.RemoteBucketBuilder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -13,25 +17,26 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class RateLimitingFilterTest {
 
-    @Mock private StringRedisTemplate redisTemplate;
+    @Mock private ProxyManager<String> proxyManager;
+    @Mock private RemoteBucketBuilder<String> remoteBucketBuilder;
+    @Mock private BucketProxy bucketProxy;            // RemoteBucketBuilder.build() returns BucketProxy
     @Mock private RateLimitProperties rateLimitProperties;
     @Mock private ObjectMapper objectMapper;
     @Mock private ClientIpResolver clientIpResolver;
-    @Mock private ValueOperations<String, String> valueOps;
     @Mock private HttpServletRequest request;
     @Mock private HttpServletResponse response;
     @Mock private FilterChain filterChain;
@@ -42,17 +47,24 @@ class RateLimitingFilterTest {
     private RateLimitProperties.Endpoint loginConfig;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         loginConfig = new RateLimitProperties.Endpoint(5, 900);
         when(rateLimitProperties.getLogin()).thenReturn(loginConfig);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(clientIpResolver.resolve(request)).thenReturn("10.0.0.1");
         when(request.getServletPath()).thenReturn("/api/v1/auth/login");
+        when(proxyManager.builder()).thenReturn(remoteBucketBuilder);
+        // Specify the Supplier<BucketConfiguration> overload explicitly to resolve ambiguity
+        when(remoteBucketBuilder.build(anyString(), any(Supplier.class))).thenReturn(bucketProxy);
     }
+
+    // ── Happy path ─────────────────────────────────────────────────────────────
 
     @Test
     void underThreshold_requestPassesThrough() throws Exception {
-        when(valueOps.increment(anyString())).thenReturn(3L);   // 3 < 5
+        // 3 tokens remaining after consumption — well under the limit of 5
+        when(bucketProxy.tryConsumeAndReturnRemaining(1))
+            .thenReturn(ConsumptionProbe.consumed(3, 0));
 
         filter.doFilterInternal(request, response, filterChain);
 
@@ -61,24 +73,26 @@ class RateLimitingFilterTest {
     }
 
     @Test
-    void atThreshold_requestPassesThrough() throws Exception {
-        // count == maxAttempts (5 == 5) — boundary: still allowed
-        when(valueOps.increment(anyString())).thenReturn(5L);
+    void atThreshold_lastToken_requestPassesThrough() throws Exception {
+        // Consuming the very last token — still isConsumed=true, chain proceeds
+        when(bucketProxy.tryConsumeAndReturnRemaining(1))
+            .thenReturn(ConsumptionProbe.consumed(0, 0));
 
         filter.doFilterInternal(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
         verify(response, never()).setStatus(429);
     }
+
+    // ── Rate-limited responses ──────────────────────────────────────────────────
 
     @Test
     void overThreshold_returns429AndDoesNotCallChain() throws Exception {
-        when(valueOps.increment(anyString())).thenReturn(6L);   // 6 > 5
-        when(redisTemplate.getExpire(anyString())).thenReturn(42L);
+        long waitNanos = TimeUnit.SECONDS.toNanos(300);
+        when(bucketProxy.tryConsumeAndReturnRemaining(1))
+            .thenReturn(ConsumptionProbe.rejected(0, waitNanos, 0));
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"error\":\"rate limited\"}");
-
-        StringWriter sw = new StringWriter();
-        when(response.getWriter()).thenReturn(new PrintWriter(sw));
+        when(response.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
 
         filter.doFilterInternal(request, response, filterChain);
 
@@ -87,9 +101,11 @@ class RateLimitingFilterTest {
     }
 
     @Test
-    void overThreshold_retryAfterHeaderSetFromRedisTtl() throws Exception {
-        when(valueOps.increment(anyString())).thenReturn(6L);
-        when(redisTemplate.getExpire(anyString())).thenReturn(300L);
+    void overThreshold_retryAfterHeaderSetFromNanosToWait() throws Exception {
+        // 300 seconds until refill
+        long waitNanos = TimeUnit.SECONDS.toNanos(300);
+        when(bucketProxy.tryConsumeAndReturnRemaining(1))
+            .thenReturn(ConsumptionProbe.rejected(0, waitNanos, 0));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
         when(response.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
 
@@ -99,39 +115,36 @@ class RateLimitingFilterTest {
     }
 
     @Test
-    void overThreshold_retryAfterFallsBackToWindowSeconds_whenTtlNegative() throws Exception {
-        when(valueOps.increment(anyString())).thenReturn(6L);
-        when(redisTemplate.getExpire(anyString())).thenReturn(-1L);  // key missing TTL
+    void overThreshold_retryAfterFallsBackToWindowSeconds_whenNanosToWaitIsZero() throws Exception {
+        // nanosToWaitForRefill == 0 → fall back to configured windowSeconds (900)
+        when(bucketProxy.tryConsumeAndReturnRemaining(1))
+            .thenReturn(ConsumptionProbe.rejected(0, 0, 0));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
         when(response.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
 
         filter.doFilterInternal(request, response, filterChain);
 
-        // Falls back to configured windowSeconds (900)
         verify(response).setIntHeader("Retry-After", 900);
     }
 
+    // ── Redis key format ────────────────────────────────────────────────────────
+
     @Test
-    void firstRequest_setsRedisTtlOnKey() throws Exception {
-        when(valueOps.increment(anyString())).thenReturn(1L);  // first hit
+    @SuppressWarnings("unchecked")
+    void redisKey_usesCorrectPrefixAndIp() throws Exception {
+        when(bucketProxy.tryConsumeAndReturnRemaining(1))
+            .thenReturn(ConsumptionProbe.consumed(3, 0));
 
         filter.doFilterInternal(request, response, filterChain);
 
-        verify(redisTemplate).expire(anyString(), eq(Duration.ofSeconds(900)));
+        // Key must preserve: rate_limit:{endpoint}:{ip}
+        verify(remoteBucketBuilder).build(eq("rate_limit:login:10.0.0.1"), any(Supplier.class));
     }
 
-    @Test
-    void subsequentRequest_doesNotResetTtl() throws Exception {
-        when(valueOps.increment(anyString())).thenReturn(2L);  // not first hit
-
-        filter.doFilterInternal(request, response, filterChain);
-
-        verify(redisTemplate, never()).expire(any(), any(Duration.class));
-    }
+    // ── shouldNotFilter ─────────────────────────────────────────────────────────
 
     @Test
-    void nonRateLimitedEndpoint_filterSkipped() throws Exception {
-        // shouldNotFilter returns true for paths outside /login and /register
+    void nonRateLimitedEndpoint_filterSkipped() {
         assertThat(filter.shouldNotFilter(mockRequestWithPath("/api/v1/auth/me"))).isTrue();
         assertThat(filter.shouldNotFilter(mockRequestWithPath("/api/v1/auth/login"))).isFalse();
         assertThat(filter.shouldNotFilter(mockRequestWithPath("/api/v1/auth/register"))).isFalse();

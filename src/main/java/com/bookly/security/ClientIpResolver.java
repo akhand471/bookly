@@ -1,13 +1,11 @@
 package com.bookly.security;
 
 import com.bookly.config.TrustedProxyProperties;
+import inet.ipaddr.IPAddressString;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 
 /**
  * Resolves the real client IP address, honoring X-Forwarded-For only when the
@@ -83,28 +81,18 @@ public class ClientIpResolver {
         return false;
     }
 
-    private boolean isInCidr(String ip, String cidr) throws UnknownHostException {
-        String[] parts = cidr.split("/");
-        int prefixLength = Integer.parseInt(parts[1]);
-        InetAddress network = InetAddress.getByName(parts[0]);
-        InetAddress address = InetAddress.getByName(ip);
-
-        byte[] networkBytes = network.getAddress();
-        byte[] addressBytes = address.getAddress();
-
-        // Must be same address family (IPv4 vs IPv6)
-        if (networkBytes.length != addressBytes.length) return false;
-
-        int fullBytes = prefixLength / 8;
-        int remainingBits = prefixLength % 8;
-
-        for (int i = 0; i < fullBytes; i++) {
-            if (networkBytes[i] != addressBytes[i]) return false;
+    private boolean isInCidr(String ip, String cidr) {
+        try {
+            IPAddressString network = new IPAddressString(cidr);
+            IPAddressString address = new IPAddressString(ip);
+            if (!network.isValid() || !address.isValid()) {
+                log.warn("Invalid CIDR '{}' or IP '{}' — skipping entry", cidr, ip);
+                return false;
+            }
+            return network.toAddress().contains(address.toAddress());
+        } catch (Exception e) {
+            log.warn("Error checking CIDR '{}' for IP '{}': {}", cidr, ip, e.getMessage());
+            return false;
         }
-        if (remainingBits > 0 && fullBytes < networkBytes.length) {
-            int mask = 0xFF & (0xFF << (8 - remainingBits));
-            if ((networkBytes[fullBytes] & mask) != (addressBytes[fullBytes] & mask)) return false;
-        }
-        return true;
     }
 }

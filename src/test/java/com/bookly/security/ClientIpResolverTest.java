@@ -141,4 +141,40 @@ class ClientIpResolverTest {
         props.setTrustedProxies(List.of("172.16.0.0/12"));
         assertThat(resolver.isTrustedProxy("172.20.0.1")).isTrue();
     }
+
+    // ── IPv6 CIDR matching ─────────────────────────────────────────────────────
+
+    @Test
+    void cidrProxy_ipv6InRange_headerHonored() {
+        // fd00::/8 covers any fd-prefixed ULA address
+        props.setTrustedProxies(List.of("fd00::/8"));
+        when(request.getRemoteAddr()).thenReturn("fd12:3456:789a::1");
+        when(request.getHeader("X-Forwarded-For")).thenReturn("203.0.113.5");
+
+        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.5");
+    }
+
+    @Test
+    void cidrProxy_ipv6OutsideRange_headerIgnored() {
+        props.setTrustedProxies(List.of("fd00::/8"));
+        when(request.getRemoteAddr()).thenReturn("2001:db8::1");  // not in fd00::/8
+        when(request.getHeader("X-Forwarded-For")).thenReturn("1.2.3.4");
+
+        assertThat(resolver.resolve(request)).isEqualTo("2001:db8::1");
+    }
+
+    // ── Invalid CIDR / IP entries ──────────────────────────────────────────────
+
+    @Test
+    void isTrustedProxy_invalidCidr_returnsFalseWithoutThrowing() {
+        // Should log a warning and return false — never propagate exceptions
+        props.setTrustedProxies(List.of("not-a-cidr/99"));
+        assertThat(resolver.isTrustedProxy("10.0.0.1")).isFalse();
+    }
+
+    @Test
+    void isTrustedProxy_malformedIp_returnsFalseWithoutThrowing() {
+        props.setTrustedProxies(List.of("10.0.0.0/8"));
+        assertThat(resolver.isTrustedProxy("not.an.ip")).isFalse();
+    }
 }
