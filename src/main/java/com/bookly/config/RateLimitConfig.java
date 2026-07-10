@@ -2,8 +2,8 @@ package com.bookly.config;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
-import io.github.bucket4j.Refill;
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
+import io.github.bucket4j.distributed.proxy.ClientSideConfig;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.lettuce.core.RedisClient;
@@ -32,6 +32,9 @@ public class RateLimitConfig {
     @Bean
     public ProxyManager<String> rateLimitProxyManager(LettuceConnectionFactory lettuceConnectionFactory) {
         io.lettuce.core.AbstractRedisClient client = lettuceConnectionFactory.getNativeClient();
+        if (client == null) {
+            throw new IllegalStateException("Lettuce native client is null. Cannot configure rate limiting.");
+        }
         if (!(client instanceof RedisClient redisClient)) {
             throw new IllegalStateException(
                 "Bucket4j rate limiting requires a standalone Redis client, but found: "
@@ -42,11 +45,14 @@ public class RateLimitConfig {
         StatefulRedisConnection<String, byte[]> connection =
             redisClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
 
-        return LettuceBasedProxyManager.builderFor(connection)
-            .withExpirationStrategy(
+        ClientSideConfig clientSideConfig = ClientSideConfig.getDefault()
+            .withExpirationAfterWriteStrategy(
                 // Keep bucket state in Redis for at least the longest configured window (login = 900s).
                 // Bucket4j will extend TTL proportionally for longer configurations.
-                ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofSeconds(900)))
+                ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofSeconds(900)));
+
+        return LettuceBasedProxyManager.builderFor(connection)
+            .withClientSideConfig(clientSideConfig)
             .build();
     }
 
@@ -59,13 +65,11 @@ public class RateLimitConfig {
      */
     public static BucketConfiguration buildBucketConfig(RateLimitProperties.Endpoint config) {
         return BucketConfiguration.builder()
-            .addLimit(Bandwidth.classic(
-                config.getMaxAttempts(),
-                Refill.intervally(
-                    config.getMaxAttempts(),
-                    Duration.ofSeconds(config.getWindowSeconds())
-                )
-            ))
+            .addLimit(Bandwidth.builder()
+                .capacity(config.getMaxAttempts())
+                .refillIntervally(config.getMaxAttempts(), Duration.ofSeconds(config.getWindowSeconds()))
+                .build())
             .build();
     }
 }
+

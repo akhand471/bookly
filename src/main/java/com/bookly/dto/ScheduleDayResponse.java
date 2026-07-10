@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalTime;
 import java.util.List;
-import java.util.UUID;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 @Schema(description = "Read-only view of a staff member's schedule for one weekday")

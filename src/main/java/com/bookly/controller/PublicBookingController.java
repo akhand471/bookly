@@ -3,7 +3,6 @@ package com.bookly.controller;
 import com.bookly.dto.*;
 import com.bookly.entity.Business;
 import com.bookly.security.TenantContext;
-import com.bookly.service.AvailabilityService;
 import com.bookly.service.BusinessService;
 import com.bookly.service.PublicBookingService;
 import com.bookly.service.ReviewService;

@@ -48,7 +48,7 @@ public class OpenApiConfig {
                 );
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings("rawtypes")
     private ApiResponse errorResponse(String description) {
         Schema schema = new Schema()
                 .addProperty("success", new Schema().type("boolean").example(false))

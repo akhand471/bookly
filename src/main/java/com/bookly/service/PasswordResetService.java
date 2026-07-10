@@ -4,7 +4,6 @@ import com.bookly.entity.AuditEventType;
 import com.bookly.entity.PasswordResetToken;
 import com.bookly.entity.User;
 import com.bookly.exception.BadRequestException;
-import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.repository.PasswordResetTokenRepository;
 import com.bookly.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
