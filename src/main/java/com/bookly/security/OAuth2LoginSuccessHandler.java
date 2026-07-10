@@ -46,7 +46,6 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
         String email = oAuth2User.getAttribute("email");
         String googleId = oAuth2User.getAttribute("sub");
-        String name = oAuth2User.getAttribute("name");
 
         if (email == null) {
             redirectWithError(response, "Google account does not have an email");

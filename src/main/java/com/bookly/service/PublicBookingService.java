@@ -5,7 +5,6 @@ import com.bookly.entity.*;
 import com.bookly.exception.BadRequestException;
 import com.bookly.exception.ConflictException;
 import com.bookly.exception.ResourceNotFoundException;
-import com.bookly.mapper.AppointmentMapper;
 import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.BookableServiceRepository;
 import com.bookly.repository.ReviewRepository;
@@ -42,7 +41,6 @@ public class PublicBookingService {
     private final CustomerService customerService;
     private final AvailabilityService availabilityService;
     private final NotificationService notificationService;
-    private final AppointmentMapper appointmentMapper;
     private final ReviewRepository reviewRepository;
 
     // ─── Browse ────────────────────────────────────────────────────────────

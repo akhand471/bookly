@@ -7,7 +7,6 @@ import com.bookly.entity.Business;
 import com.bookly.entity.Customer;
 import com.bookly.exception.ResourceNotFoundException;
 import com.bookly.mapper.CustomerMapper;
-import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.CustomerRepository;
 import com.bookly.security.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +30,6 @@ import java.util.UUID;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
-    private final AppointmentRepository appointmentRepository;
     private final CustomerMapper customerMapper;
 
     // ─── Guest findOrCreate ────────────────────────────────────────────────

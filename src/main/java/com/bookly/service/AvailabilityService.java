@@ -7,7 +7,6 @@ import com.bookly.repository.AppointmentRepository;
 import com.bookly.repository.BookableServiceRepository;
 import com.bookly.repository.StaffScheduleOverrideRepository;
 import com.bookly.repository.StaffScheduleRepository;
-import com.bookly.repository.UserRepository;
 import com.bookly.security.TenantContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,7 +57,6 @@ public class AvailabilityService {
     private static final String CACHE_KEY_PREFIX = "avail:";
 
     private final BookableServiceRepository serviceRepository;
-    private final UserRepository userRepository;
     private final StaffScheduleRepository scheduleRepository;
     private final StaffScheduleOverrideRepository overrideRepository;
     private final AppointmentRepository appointmentRepository;
