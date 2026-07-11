@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.bookly.mapper.UserMapper;
+
 /**
  * Manages staff recurring schedules and date-specific overrides.
  * <p>
@@ -37,6 +39,16 @@ public class StaffScheduleService {
     private final StaffScheduleOverrideRepository overrideRepository;
     private final UserRepository userRepository;
     private final StaffScheduleMapper mapper;
+    private final UserMapper userMapper;
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> getStaff(UUID businessId) {
+        return userRepository.findAllByBusiness_IdAndIsEnabledTrue(businessId)
+                .stream()
+                .filter(u -> u.getRole() == Role.EMPLOYEE || u.getRole() == Role.BUSINESS_OWNER)
+                .map(userMapper::toResponse)
+                .collect(Collectors.toList());
+    }
 
     // ─── Weekly Schedule ───────────────────────────────────────────────────
 

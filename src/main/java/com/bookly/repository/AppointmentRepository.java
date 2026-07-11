@@ -55,7 +55,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
             WHERE a.business.id = :businessId
               AND (:customerId IS NULL OR a.customer.id = :customerId)
               AND (:staffId IS NULL OR a.staff.id = :staffId)
-              AND (:status IS NULL OR a.status = :status)
+              AND (CAST(:status AS string) IS NULL OR CAST(a.status AS string) = CAST(:status AS string))
               AND (:from IS NULL OR a.startTime >= :from)
               AND (:to IS NULL OR a.startTime <= :to)
             ORDER BY a.startTime DESC

@@ -2,6 +2,8 @@ package com.bookly.controller;
 
 import com.bookly.dto.*;
 import com.bookly.service.StaffScheduleService;
+import com.bookly.security.CustomUserDetails;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,6 +25,8 @@ import java.util.UUID;
  * BUSINESS_OWNER can manage any staff member's schedule.
  * EMPLOYEE can read their own schedule.
  */
+import com.bookly.service.UserService;
+
 @RestController
 @RequestMapping("/api/v1/staff")
 @RequiredArgsConstructor
@@ -31,6 +35,7 @@ import java.util.UUID;
 public class StaffScheduleController {
 
     private final StaffScheduleService staffScheduleService;
+    private final UserService userService;
 
     // ─── Weekly Schedule ───────────────────────────────────────────────────
 
@@ -103,5 +108,27 @@ public class StaffScheduleController {
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         staffScheduleService.deleteOverride(staffId, date);
         return ResponseEntity.ok(ApiResponse.success(null, "Schedule override deleted successfully"));
+    }
+
+    @GetMapping
+    @Operation(
+        summary = "List all staff members for the business",
+        description = "Returns all active staff/employees registered under the business. Accessible by BUSINESS_OWNER and EMPLOYEES."
+    )
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getStaff(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        List<UserResponse> result = staffScheduleService.getStaff(userDetails.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success(result, "Staff list retrieved successfully"));
+    }
+
+    @GetMapping("/{staffId}")
+    @Operation(
+        summary = "Get a staff member's profile by ID",
+        description = "Returns a staff member's profile details. Accessible by BUSINESS_OWNER, EMPLOYEES and CUSTOMERS."
+    )
+    public ResponseEntity<ApiResponse<UserResponse>> getStaffMember(
+            @PathVariable UUID staffId) {
+        UserResponse response = userService.getUserById(staffId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Staff profile retrieved successfully"));
     }
 }
