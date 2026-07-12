@@ -359,5 +359,6 @@ bookly/
 <div align="center">
 
 Built with ❤️ using Spring Boot 3 · PostgreSQL 16 · Redis 7 · Flyway · MapStruct
+Akhand
 
 </div>
